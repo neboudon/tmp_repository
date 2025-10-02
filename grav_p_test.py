@@ -1,7 +1,9 @@
 import numpy as np
 import cv2  # OpenCVをインポート
-import serial
+#import serial
 import time
+
+
 
 # --- パラメータ設定 ---
 # 実際にロボットと通信する場合は、ここをTrueにしてください
@@ -72,7 +74,20 @@ def main():
     if not cap.isOpened():
         print(f"エラー: カメラ (インデックス: {CAMERA_INDEX}) を開けません。")
         return
+    
+    # --- ★★★ ここから追加 ★★★ ---
+    # check_video.pyで動作した設定を追加する
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)
 
+    # 念のため設定が反映されたか確認
+    width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    print(f"カメラ設定 -> 解像度: {int(width)} x {int(height)}, FPS: {fps}")
+    # --- ★★★ ここまで追加 ★★★ ---
+    
     print("カメラを起動しました。'q'キーを押すと終了します。")
 
     try:
@@ -102,6 +117,7 @@ def main():
             # 画像中心の線 (水色)
             cv2.line(frame, (width // 2, 0), (width // 2, height), (255, 255, 0), 2)
             # 計算された重心の位置 (赤丸)
+            #cv2.line(frame, (int(centroid_x), 0), (int(centroid_x), height), (0, 0, 255), 2)
             cv2.circle(frame, (int(centroid_x), height // 2), 10, (0, 0, 255), -1)
             # プレビューウィンドウを表示
             cv2.imshow('Cugo Camera View', frame)
