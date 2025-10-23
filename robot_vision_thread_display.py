@@ -5,14 +5,13 @@ import cv2
 import numpy as np
 import math
 import time
-# threading をインポート (multiprocessing は不要)
 
 # --- パラメータ (軽量化のため調整) ---
 RESIZE_WIDTH = 240
 MIN_NOISE_AREA = 80 
 
 # ===================================================================
-# スレッド1: 操舵用 (line_detect ベース)
+# スレッド1: 操舵用 (変更なし)
 # ===================================================================
 def steering_thread_func(camera_index, shared_state, lock):
     """
@@ -121,31 +120,30 @@ def steering_thread_func(camera_index, shared_state, lock):
         image_center_x = width / 2
         x_difference = vp_x - image_center_x
         
-        # --- 5b. デバッグ描画 (★★★ 追加 ★★★) ---
-        # 消失点を描画
+        # --- 5b. デバッグ描画 ---
         cv2.circle(resized_frame, (vp_x, height // 2), 10, (0, 0, 255), -1) 
-        # 中心線を描画
         cv2.line(resized_frame, (width // 2, 0), (width // 2, height), (255, 0, 0), 1)
 
         # --- 6. 共有辞書へ書き込み (ロックを使用) ---
         with lock:
             shared_state['steering_value'] = x_difference
-            # ★★★ 変更: フレームを共有辞書に保存 (コピー) ★★★
             shared_state['steering_frame'] = resized_frame.copy() 
         
-        time.sleep(0.5) # 元のコードのスリープを維持
+        time.sleep(0.5) 
 
     cap.release()
     print("[操舵スレッド]: カメラを解放しました。")
 
 
 # ===================================================================
-# スレッド2: 壁検出用 (wall_line ベース)
+# スレッド2: 壁検出用 ( ★★★ ここから大幅に変更 ★★★ )
 # ===================================================================
 def wall_thread_func(camera_index, shared_state, lock):
     """
-    【スレッド版】
-    壁（垂直線）を検出し、結果(0 or 1)と処理済みフレームを共有辞書に書き込む。
+    【スレッド版・360度カメラ対応】
+    フレームを「右(上半分)」「左(下半分)」に分割し、
+    *どちらか*で垂直線を検出したらフラグを立て、
+    処理済みフレームを結合して共有辞書に書き込む。
     """
 
     # --- 壁検出用パラメータ ---
@@ -162,7 +160,7 @@ def wall_thread_func(camera_index, shared_state, lock):
     if not cap.isOpened():
         print(f"[壁検出スレッド] エラー: カメラ ({camera_index}) を開けません。")
         with lock:
-            shared_state['stop'] = True # エラーならメインスレッドに停止を通知
+            shared_state['stop'] = True 
         return
     print(f"[壁検出スレッド]: カメラ({camera_index}) 起動完了。")
 
@@ -173,66 +171,110 @@ def wall_thread_func(camera_index, shared_state, lock):
                 break
 
         ret, frame = cap.read()
-        if not ret:
+        if not ret or frame is None:
             print("[壁検出スレッド] エラー: フレームを取得できません。")
             time.sleep(0.5)
             continue
-            
-        # --- 1. リサイズ ---
+        
+        # --- ★ 1. フレームを上下（右と左）に分割 ★ ---
         try:
             orig_height, orig_width = frame.shape[:2]
-            aspect_ratio = orig_height / orig_width
-            resize_height = int(RESIZE_WIDTH * aspect_ratio)
-            resized_frame = cv2.resize(frame, (RESIZE_WIDTH, resize_height), interpolation=cv2.INTER_AREA)
+            half_height = orig_height // 2
+            
+            # 上半分 = 右側
+            frame_right = frame[0:half_height, :] 
+            # 下半分 = 左側
+            frame_left = frame[half_height:, :]
+            
+            fragments = [frame_right, frame_left]
+            processed_frames = []
+            local_wall_detected = 0 # 0: 未検出
+        
         except Exception as e:
-            print(f"[壁検出スレッド] リサイズエラー: {e}")
+            print(f"[壁検出スレッド] フレーム分割エラー: {e}")
             time.sleep(0.5)
             continue
+            
+        # --- ★ 2. 分割した画像を個別に処理 ★ ---
+        for img_fragment in fragments:
+            
+            fragment_detected = 0
+            resized_frame = None # 初期化
 
-        # --- 2. 前処理 ---
-        gray = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=CLIP_LIMIT, tileGridSize=TILE_GRID_SIZE)
-        adjusted = clahe.apply(gray)
-        blurred_again = cv2.GaussianBlur(adjusted, (7, 7), 0)
-        edges = cv2.Canny(blurred_again, CANNY_THRESHOLD1, CANNY_THRESHOLD2)
-        
-        # --- 3. ノイズ除去 ---
-        # (元コードでコメントアウトされていたため、ここでもコメントアウト)
-        """
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(edges, connectivity=8)
-        cleaned_edges = np.zeros_like(edges)
-        for i in range(1, num_labels):
-            if stats[i, cv2.CC_STAT_AREA] > MIN_NOISE_AREA:
-                cleaned_edges[labels == i] = 255
-        """
-        
-        # --- 4. ハフ変換 ---
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, # cleaned_edges ではなく edges を使用
-                                threshold=HOUGH_THRESHOLD,
-                                minLineLength=HOUGH_MIN_LINE_LENGTH,
-                                maxLineGap=HOUGH_MAX_LINE_GAP)
-        
-        local_wall_detected = 0 # 0: 未検出
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                angle_deg = math.degrees(math.atan2(y2 - y1, x2 - x1))
-                abs_angle_deg = abs(angle_deg)
+            try:
+                # --- 2a. リサイズ ---
+                orig_h_frag, orig_w_frag = img_fragment.shape[:2]
+                if orig_h_frag == 0 or orig_w_frag == 0:
+                    raise ValueError("Fragment is empty")
+                    
+                aspect_ratio = orig_h_frag / orig_w_frag
+                resize_height = int(RESIZE_WIDTH * aspect_ratio)
+                resized_frame = cv2.resize(img_fragment, (RESIZE_WIDTH, resize_height), interpolation=cv2.INTER_AREA)
+
+                # --- 2b. 前処理 ---
+                gray = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
+                clahe = cv2.createCLAHE(clipLimit=CLIP_LIMIT, tileGridSize=TILE_GRID_SIZE)
+                adjusted = clahe.apply(gray)
+                blurred_again = cv2.GaussianBlur(adjusted, (7, 7), 0)
+                edges = cv2.Canny(blurred_again, CANNY_THRESHOLD1, CANNY_THRESHOLD2)
                 
-                is_vertical = (80 <= abs_angle_deg <= 100)
-                if is_vertical:
-                    local_wall_detected = 1 # 1: 検出
-                    break 
+                # --- 2c. ノイズ除去 (元コードでコメントアウト) ---
+                # ... 
+                
+                # --- 2d. ハフ変換 ---
+                lines = cv2.HoughLinesP(edges, 1, np.pi / 180,
+                                        threshold=HOUGH_THRESHOLD,
+                                        minLineLength=HOUGH_MIN_LINE_LENGTH,
+                                        maxLineGap=HOUGH_MAX_LINE_GAP)
+                
+                # --- 2e. 検出ロジック ---
+                if lines is not None:
+                    for line in lines:
+                        x1, y1, x2, y2 = line[0]
+                        angle_deg = math.degrees(math.atan2(y2 - y1, x2 - x1))
+                        abs_angle_deg = abs(angle_deg)
+                        
+                        is_vertical = (80 <= abs_angle_deg <= 100)
+                        if is_vertical:
+                            fragment_detected = 1 # 1: 検出
+                            local_wall_detected = 1 # ★ どちらかで検出したらメインフラグを立てる
+                            break 
+            
+            except Exception as e:
+                print(f"[壁検出スレッド] Fragment処理エラー: {e}")
+                # エラーが発生した場合、ダミーの黒画像を作成
+                # (vstackが失敗するのを防ぐため)
+                # 仮の高さを設定 (アスペクト比 4:3 を想定)
+                dummy_height = int(RESIZE_WIDTH * (3/4)) 
+                resized_frame = np.zeros((dummy_height, RESIZE_WIDTH, 3), dtype=np.uint8)
+                cv2.putText(resized_frame, "ERROR", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+
+            # --- 2f. 描画 ---
+            if fragment_detected == 1:
+                cv2.putText(resized_frame, "WALL", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            
+            processed_frames.append(resized_frame)
+
+        # --- ★ 3. 処理済みフレームを結合して共有 ★ ---
+        try:
+            # 2つのフレームを縦に結合 (上: Right, 下: Left)
+            combined_frame = np.vstack((processed_frames[0], processed_frames[1]))
+            
+            # --- 5. 共有辞書へ書き込み (ロックを使用) ---
+            with lock:
+                shared_state['wall_detected'] = local_wall_detected
+                shared_state['wall_frame'] = combined_frame.copy() 
         
-        # --- 4b. デバッグ描画 (★★★ 追加 ★★★) ---
-        if local_wall_detected == 1:
-            cv2.putText(resized_frame, "WALL", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        
-        # --- 5. 共有辞書へ書き込み (ロックを使用) ---
-        with lock:
-            shared_state['wall_detected'] = local_wall_detected
-            # ★★★ 変更: フレームを共有辞書に保存 (コピー) ★★★
-            shared_state['wall_frame'] = resized_frame.copy() 
+        except Exception as e:
+            print(f"[壁検出スレッド] フレーム結合エラー: {e}")
+            # vstackに失敗した場合 (サイズ不一致など)
+            with lock:
+                 # 検出結果だけは更新する
+                shared_state['wall_detected'] = local_wall_detected
+                # フレームは更新しない (あるいはエラー画像を送る)
+                # shared_state['wall_frame'] = ... 
+
             
         time.sleep(0.2) # 元のコードのスリープを維持
 
