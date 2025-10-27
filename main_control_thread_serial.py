@@ -39,7 +39,7 @@ MAIN_LOOP_WAIT_SEC = MAIN_LOOP_WAIT_MS / 1000.0 # ★★★ time.sleep() 用 ★
 
 # ★★★ シリアルポート設定 ★★★
 # ラズパイ4のGPIO (GP14, GP15) でPicoのUART (GP0, GP1など) と接続する場合
-SERIAL_PORT = '/dev/ttyAM1' 
+SERIAL_PORT = '/dev/ttyS0' 
 # (注意: /dev/ttyS0 を使うには sudo raspi-config でシリアルコンソールを無効化する必要あり)
 
 # ラズパイ4のUSBポートとPicoのUSBポートを接続する場合 (Pico側がCDCとして動作)
