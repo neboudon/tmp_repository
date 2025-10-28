@@ -199,7 +199,7 @@ def steering_thread_func(camera_index, shared_state, lock):
                 with lock:
                     shared_state['steering_value'] = x_difference
                     # ★★★ GUI用にフレームを共有 ★★★
-                    shared_state['steering_frame'] = resized_frame.copy() 
+                    #shared_state['steering_frame'] = resized_frame.copy() 
                 
                 # --- ★★★ 7. 動画ファイルに書き込み ★★★ ---
                 if out_video_writer:

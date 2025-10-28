@@ -39,7 +39,7 @@ MAIN_LOOP_WAIT_MS = 50 # ★★ cv2.waitKey() 用 ★★★
 
 
 # ★★★ シリアルポート設定 ★★★
-SERIAL_PORT = '/dev/ttyS0' 
+SERIAL_PORT = '/dev/ttyAMA0' 
 # SERIAL_PORT = '/dev/ttyACM0' 
 SERIAL_BAUDRATE = 115200
 
@@ -54,7 +54,7 @@ def main():
         # 'gravity_value': 0.0, # ★★ 使わない ★★
         
         # --- GUI表示用にフレームを追加 ★★★
-        'steering_frame': None, 
+        #'steering_frame': None, 
         # 'wall_frame_right': None, # ★★ 使わない ★★
         # 'wall_frame_left': None,  # ★★ 使わない ★★
         # 'gravity_frame': None # ★★ 使わない ★★
@@ -118,8 +118,8 @@ def main():
                 # is_wall_detected = (shared_state['wall_detected'] == 1) # ★★ 使わない ★★
                 
                 # --- ★★★ 描画フレームを取得 ★★★ ---
-                if shared_state['steering_frame'] is not None:
-                    frame_steering = shared_state['steering_frame'].copy()
+                #if shared_state['steering_frame'] is not None:
+                #    frame_steering = shared_state['steering_frame'].copy()
                 
                 # current_gravity_diff = shared_state['gravity_value'] # ★★ 使わない ★★
             
@@ -182,9 +182,9 @@ def main():
                   f"コマンド: {final_command}")
             
             # --- 4-6. 画像の表示 (★★★ 操舵カメラのみ有効化 ★★★) ---
-            if STEERING_MODE == 'LINE_DETECT':
-                if frame_steering is not None:
-                    cv2.imshow('Steering Camera', frame_steering)
+            #if STEERING_MODE == 'LINE_DETECT':
+            #    if frame_steering is not None:
+            #        cv2.imshow('Steering Camera', frame_steering)
                 # if cv2.getWindowProperty('Gravity Camera', cv2.WND_PROP_VISIBLE) >= 1: # ★★ 使わない ★★
                 #     cv2.destroyWindow('Gravity Camera') # ★★ 使わない ★★
             
@@ -202,10 +202,10 @@ def main():
             # time.sleep(MAIN_LOOP_WAIT_SEC) # ← GUIなしの場合
             
             # GUIありの場合 (qキーで終了)
-            key = cv2.waitKey(MAIN_LOOP_WAIT_MS) & 0xFF
-            if key == ord('q'):
-                print("\n[メイン]: 'q'キーを検出。全スレッドを停止します。")
-                break # ループを抜ける
+            #key = cv2.waitKey(MAIN_LOOP_WAIT_MS) & 0xFF
+            #if key == ord('q'):
+            #    print("\n[メイン]: 'q'キーを検出。全スレッドを停止します。")
+            #    break # ループを抜ける
 
     except KeyboardInterrupt:
         print("\n[メイン]: Ctrl+Cを検出。全スレッドを停止します。")
@@ -228,7 +228,7 @@ def main():
             ser.close()
             print("[メイン]: シリアルポートを閉じました。")
         
-        cv2.destroyAllWindows() # ★★★ GUIウィンドウを閉じる ★★★
+        #cv2.destroyAllWindows() # ★★★ GUIウィンドウを閉じる ★★★
         print("[メイン]: プログラムを終了します。")
 
 
