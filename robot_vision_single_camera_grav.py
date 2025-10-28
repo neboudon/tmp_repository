@@ -140,7 +140,7 @@ def gravity_thread_func(camera_index, shared_state, lock):
                 # --- 6. 共有辞書へ書き込み (ロックを使用) ---
                 with lock:
                     shared_state['gravity_value'] = x_difference
-                    shared_state['gravity_frame'] = resized_frame.copy() # ★★★ GUI用に有効化 ★★★
+                    #shared_state['gravity_frame'] = resized_frame.copy() # ★★★ GUI用に有効化 ★★★
             
                 # --- ★★★ 7. 動画ファイルに書き込み ★★★ ---
                 if out_video_writer:

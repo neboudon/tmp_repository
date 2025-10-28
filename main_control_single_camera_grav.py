@@ -38,7 +38,7 @@ MAIN_LOOP_WAIT_MS = 50 # ★★ cv2.waitKey() 用 ★★★
 
 
 # ★★★ シリアルポート設定 ★★★
-SERIAL_PORT = '/dev/ttyS0' 
+SERIAL_PORT = '/dev/ttyAMA0' 
 # SERIAL_PORT = '/dev/ttyACM0' 
 SERIAL_BAUDRATE = 115200
 
@@ -103,7 +103,7 @@ def main():
     # frame_steering = None # ★★ 使わない ★★
     # frame_wall_right = None # ★★ 使わない ★★
     # frame_wall_left = None  # ★★ 使わない ★★
-    frame_gravity = None # ★★★ 有効化 ★★★
+    #frame_gravity = None # ★★★ 有効化 ★★★
 
     try:
         while True:
@@ -122,8 +122,8 @@ def main():
                 
                 # ★★★ 重心データを取得 ★★★
                 current_gravity_diff = shared_state['gravity_value']
-                if shared_state['gravity_frame'] is not None:
-                    frame_gravity = shared_state['gravity_frame'].copy()
+                #if shared_state['gravity_frame'] is not None:
+                #    frame_gravity = shared_state['gravity_frame'].copy()
             
             # --- 4-2. 操舵コマンドを生成 ---
             steering_command = "S" 
@@ -189,12 +189,12 @@ def main():
             #         cv2.imshow('Steering Camera', frame_steering)
             
             # ★★★ 重心モードの表示を有効化 ★★★
-            if STEERING_MODE == 'GRAVITY':
-                if frame_gravity is not None:
-                    cv2.imshow('Gravity Camera', frame_gravity)
+            #if STEERING_MODE == 'GRAVITY':
+            #    if frame_gravity is not None:
+            #        cv2.imshow('Gravity Camera', frame_gravity)
                 # (不要なウィンドウを閉じる処理)
-                if cv2.getWindowProperty('Steering Camera', cv2.WND_PROP_VISIBLE) >= 1:
-                    cv2.destroyWindow('Steering Camera')
+                #if cv2.getWindowProperty('Steering Camera', cv2.WND_PROP_VISIBLE) >= 1:
+                #    cv2.destroyWindow('Steering Camera')
             
             # ★★ 壁カメラの表示は使わない ★★
             # if frame_wall_right is not None:
@@ -231,7 +231,7 @@ def main():
             ser.close()
             print("[メイン]: シリアルポートを閉じました。")
         
-        cv2.destroyAllWindows() # ★★★ GUIウィンドウを閉じる ★★★
+        #cv2.destroyAllWindows() # ★★★ GUIウィンドウを閉じる ★★★
         print("[メイン]: プログラムを終了します。")
 
 
